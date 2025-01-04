@@ -1,0 +1,221 @@
+---
+title: "Find and map pair sites"
+author: "emlombardi"
+date: "2025-01-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r}
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(giscoR)
+library(leaflet)
+
+```
+
+## Load Data
+
+```{r} 
+dat <- read.delim("~/Desktop/Research/UMD/Herbarium Research/Collection Distances Calculator/Longitudinal Collections Location ID /Bstricta_GBIF_Jan32025.csv")
+
+names(dat)
+table(dat$basisOfRecord)
+
+#conver dat to spatial dataframe
+dat.sf <- st_as_sf(dat, coords = c("decimalLongitude", "decimalLatitude"), crs = 4326) %>% st_transform(crs = 3857)
+```
+
+## Split and Subset Data
+Create subsets of data based on collection type and timing. For now, I'll simply split so that we have a set of herbarium specimens and a set of iNaturalist observations. 
+
+```{r}
+#herbarium data
+herb <- dat.sf %>%
+  filter(basisOfRecord == "PRESERVED_SPECIMEN") %>%
+  select(gbifID, scientificName, locality, stateProvince, elevation, year)
+
+#observation data
+obs <- dat.sf %>%
+  filter(basisOfRecord == "HUMAN_OBSERVATION")%>%
+  select(gbifID, scientificName, locality, stateProvince, elevation, year)
+```
+
+## Buffer around herbarium collection locations
+Create a 1 kilometer buffer around each record in the herbarium dataframe. 
+
+```{r}
+herb.buffer <- st_buffer(herb, dist = 1000)
+
+#find observations within the 1 kilometer buffer
+match <- st_within(obs, herb.buffer, sparse = FALSE)
+
+# Create a dataframe with matches
+matched <- tibble(
+  herbarium_id = rep(herb$gbifID, each = nrow(obs)),
+  obs_id = rep(obs$gbifID, times = nrow(herb)),
+  within_1km = as.vector(match)
+) %>%
+  filter(within_1km) # Keep only the matches
+
+# Join back with original data for additional details if needed
+matched <- matched %>%
+  left_join(herb, by = c("herbarium_id" = "gbifID")) %>%
+  left_join(select(obs, gbifID, year), by = c("obs_id" = "gbifID"))
+
+matched <- matched %>%
+  mutate(yearDiff = abs(year.x - year.y))
+
+```
+
+## Visualize
+For each of the herbarium specimens that have a human observation made within a kilometer, what is the general time difference?
+```{r}
+hist(matched$yearDiff)
+summary(matched$yearDiff)
+
+#Hmmm...seems like we have clusters that we might want to contend with
+length(unique(matched$herbarium_id)) 
+length(unique(matched$obs_id))
+
+```
+
+### Map
+
+```{r}
+matched %>%
+  ggplot() +
+  geom_sf(aes(geometry = geometry.x), color = "red", size = 2, alpha = 0.7) +
+  geom_sf(aes(geometry = geometry.y), color = "black", size = .5, alpha = 0.7) +
+  ggtitle("Herbarium and Observation Points") +
+  theme_minimal()
+
+```
+### interactive mapping
+```{r}
+# Load required packages
+library(leaflet)
+library(sf)
+library(dplyr)
+
+# Assuming 'herb' and 'obs' are already sf objects (spatial data frames)
+# Ensure that both datasets have the same CRS, and reproject if necessary
+herb <- dat.sf %>%
+  filter(stateProvince == "Colorado") %>% #subsetting this just so there are fewer data for now
+  filter(basisOfRecord =="PRESERVED_SPECIMEN") %>%
+  st_transform(crs = 4326)  
+obs <- dat.sf %>%
+  filter(stateProvince == "Colorado") %>%
+  filter(basisOfRecord =="HUMAN_OBSERVATION") %>%
+  st_transform(crs = 4326)  
+
+
+# Create a 1-kilometer buffer around 'herb' points
+herb_buffer <- st_buffer(herb, dist = 1000)  # Buffer distance in meters
+plot(herb_buffer$geometry)
+
+
+# Create leaflet map
+map <- leaflet() %>%
+  addTiles() %>%
+  
+  # Add semi-transparent buffer around herb records
+  addPolygons(
+    data = herb_buffer,
+    color = "salmon",       # Border color
+    fillColor = "salmon",   # Fill color
+    fillOpacity = 0.3,    # Transparency of the buffer
+    weight = 1,
+    popup = "Herbarium Buffer"
+  ) %>%
+  
+  # Add 'herb' points in red
+  addCircleMarkers(
+    data = herb,
+    color = "salmon",
+    radius = 2,
+    fillOpacity = 0.7,
+    weight = 1,
+    popup =  ~paste("Herbarium Collections, ID: ", gbifID)
+  ) %>%
+  
+  # Add 'obs' points in black
+  addCircleMarkers(
+    data = obs,
+    color = "slategrey",
+    radius = 5,
+    fillOpacity = 0.7,
+    weight = 2,
+    popup = ~paste("Observation, ID: ", gbifID)
+  ) %>%
+  
+  # Add a legend for point types
+  addLegend(
+    position = "bottomright",
+    colors = c("salmon", "slategrey"),
+    labels = c("Herbarium Collections", "Human Observations"),
+    title = "Record Type"
+  )
+
+# Display the map
+map
+```
+
+### subset map
+include only the observations that were within the 1 kilometer buffer 
+```{r}
+# subset the observations
+obs.near <- st_intersection(obs, herb_buffer)
+
+map2 <- leaflet() %>%
+  addTiles() %>%
+  
+  # Add semi-transparent buffer around herb records
+  addPolygons(
+    data = herb_buffer,
+    color = "salmon",       # Border color
+    fillColor = "salmon",   # Fill color
+    fillOpacity = 0.3,      # Transparency of the buffer
+    weight = 1,
+    popup = "Herbarium Buffer"
+  ) %>%
+  
+  # Add 'herb' points in red
+  addCircleMarkers(
+    data = herb,
+    color = "salmon",
+    radius = 2,
+    fillOpacity = 0.7,
+    weight = 1,
+    popup = ~paste("Herbarium Collections, ID: ", gbifID)
+  ) %>%
+  
+  # Add 'obs' points in black, but only those within the buffer
+  addCircleMarkers(
+    data = obs.near,
+    color = "goldenrod",
+    radius = 3,
+    fillOpacity = 0.7,
+    weight = 2,
+    popup = ~paste("Observation, ID: ", gbifID)
+  ) %>%
+  
+  # Add a legend for point types
+  addLegend(
+    position = "bottomright",
+    colors = c("salmon", "goldenrod"),
+    labels = c("Herbarium Collections", "Human Observations within Buffer"),
+    title = "Record Type"
+  )
+
+map2
+
+
+```

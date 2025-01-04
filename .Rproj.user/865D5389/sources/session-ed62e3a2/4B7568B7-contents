@@ -1,0 +1,132 @@
+##Checking USDA GRIN resources for Helianthus
+#data downloaded July 30 2024; filtered 'helianthus' for those accessions that are i) available for use and ii) from the United States
+
+
+#load libraries that are useful
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+
+
+#load GRIN CSV file
+grin <- read.csv("~/Desktop/Research/NSF Helianthus/GRIN_Helianthus_accessions.csv")
+head(grin)
+
+#what species are in GRIN accessions?
+table(grin$TAXONOMY)
+
+
+#Wild collected seed resources only
+wild.grin <- grin %>%
+  filter(IMPROVEMENT.STATUS == "WILD") %>%
+  separate(TAXONOMY, into=c("genus", "species", "variety", "level", "subspp"), sep=" ") %>%
+  unite("scientificName", genus, species, sep = " ")
+
+#What is the taxonomic breakdown of available wild collected seeds
+wild.grin.taxa = wild.grin %>%
+  count(scientificName, tally=n())
+
+
+#Petiolaris seed resources only
+grin.petiolaris = wild.grin %>%
+  filter(scientificName=="Helianthus petiolaris")
+
+summary(grin.petiolaris$RECEIVED)
+write.csv(grin.petiolaris, "/Users/elizabethlombardi/Desktop/Research/NSF Helianthus/Occurrence Spreadsheets/GRIN_HelianthusPetiolaris.CSV", row.names = TRUE)
+
+
+#Hpetiolaris in texas
+hpet.tx <- grin.petiolaris %>%
+  mutate(State = str_split_fixed(ORIGIN, ",", 2)[,1]) %>%
+  filter(State=="Texas")
+
+table(hpet.tx$RECEIVED)
+
+#Hpetiolaris in North Dakota
+hpet.ND <- grin.petiolaris %>%
+  mutate(State = str_split_fixed(ORIGIN, ",", 2)[,1]) %>%
+  filter(State=="North Dakota")
+
+table(hpet.ND$RECEIVED)
+
+#Hpetiolaris in South Dakota
+hpet.SD2 <- grin.petiolaris %>%
+  mutate(State = str_split_fixed(ORIGIN, ",", 2)[,1]) %>%
+  filter(State=="South Dakota")
+
+table(hpet.SD$RECEIVED)
+
+
+###Interactive map of texas seed sources
+library(tmap)    # for static and interactive maps
+library(leaflet) # for interactive maps
+library(ggplot2) # tidyverse data visualization package
+
+
+hpet.tidy <- read.csv("~/Desktop/Research/NSF Helianthus/Occurrence Spreadsheets/GRIN_HelianthusPetiolaris.CSV")
+required_columns <- c("LONGITUDE", "LATITUDE", "RECEIVED", "PLANT.NAME")
+if(!all(required_columns %in% names(hpet.tidy))) {
+  stop(paste("CSV must contain the following columns:", paste(required_columns, collapse = ", ")))
+}
+
+#year data formatting
+# Ensure the RECEIVED column is numeric
+hpet.tidy$RECEIVED <- as.numeric(hpet.tidy$RECEIVED)
+
+# Create a color palette based on the RECEIVED year
+palette <- colorNumeric(
+  palette = "viridis",  # Change palette to your preference (e.g., "plasma", "magma")
+  domain = hpet.tidy$RECEIVED
+)
+
+# Create the leaflet map
+map <- leaflet(data = hpet.tidy) %>%
+  addTiles() %>%  # Add default basemap
+  setView(lng = -100, lat = 40, zoom = 3) %>%  # Center the map on North America
+  addCircleMarkers(
+    ~LONGITUDE, ~LATITUDE,
+    popup = ~paste0("<b>Plant ID:</b> ", PLANT.ID, "<br>",
+                    "<b>Year:</b> ", RECEIVED),
+    radius = 5,
+    color = ~palette(RECEIVED),  # Use the color palette for year
+    fillColor = ~palette(RECEIVED),  # Fill color based on the palette
+    fill = TRUE,
+    fillOpacity = 0.7
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal = palette,
+    values = ~RECEIVED,
+    title = "Year",
+    opacity = 1
+  )
+# Display the map
+map
+
+
+
+
+
+#Annuus seed resources only
+grin.annuus = wild.grin %>%
+  filter(scientificName=="Helianthus annuus")
+
+summary(grin.annuus$RECEIVED)
+
+
+#Paradoxus seed resources only
+grin.paradox = wild.grin %>%
+  filter(scientificName=="Helianthus paradoxus")
+
+summary(grin.paradox$RECEIVED)
+
+
+## Regional focus
+#HPet in texas only
+
+
+
+
+  
+  

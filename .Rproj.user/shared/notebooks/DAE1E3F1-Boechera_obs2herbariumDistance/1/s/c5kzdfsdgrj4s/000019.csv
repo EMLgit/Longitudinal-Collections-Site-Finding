@@ -1,0 +1,17 @@
+"0","# Create a dataframe with matches
+matched <- tibble(
+  herbarium_id = rep(herb$gbifID, each = nrow(obs)),
+  obs_id = rep(obs$gbifID, times = nrow(herb)),
+  within_1km = as.vector(match)
+) %>%
+  filter(within_1km) # Keep only the matches
+"
+"1","[1m[33mError[39m in `tibble()`:[22m
+[38;5;252m[33m![38;5;252m Tibble columns must have compatible sizes.
+[36m•[38;5;252m Size 417830: Existing data.
+[36m•[38;5;252m Size 51142560: Column `within_1km`.
+[36mℹ[38;5;252m Only values of size one are recycled.[39m
+Backtrace:
+[90m 1. [39m... %>% filter(within_1km)
+[90m 3. [39m[1m[94mtibble::tibble([39m[22m...[1m[94m)[39m[22m
+"

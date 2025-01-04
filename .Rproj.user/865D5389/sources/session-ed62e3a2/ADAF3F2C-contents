@@ -1,0 +1,48 @@
+---
+title: "USDA mapping of helianthus"
+author: "emlombardi"
+date: "2024-12-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+
+```{r}
+install.packages("tidyUSDA")
+library(tidyUSDA)
+
+
+library(tidyUSDA)
+
+# Save your API token to a variable, or better yet, use the keyring package to store it securely
+key <- 'C2754B56-2630-3194-A89A-77298295C374'
+
+vignette("using_tidyusda")
+
+```
+
+
+#Map
+
+```{r}
+try.usda <- tidyUSDA::getQuickstat(
+  sector=NULL,
+  group=NULL,
+  commodity='15831999', #commodity key for all sunflower seed (USDA quick stats website)
+  category=NULL,
+  domain=NULL,
+  county=NULL,
+  key = key,
+  program = 'CENSUS',
+  data_item = 'CROP TOTALS - OPERATIONS WITH SALES',
+  geographic_level = 'COUNTY',
+  year = '2017',
+  state = NULL,
+  geometry = T,
+  lower48 = T)
+
+```
